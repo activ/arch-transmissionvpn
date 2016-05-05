@@ -5,7 +5,6 @@ ADD setup/*.conf /etc/supervisor/conf.d/
 ADD setup/root/*.sh /root/
 ADD apps/root/*.sh /root/
 ADD apps/nobody/*.sh /home/nobody/
-ADD config/nobody/ /home/nobody/
 
 RUN chmod +x /root/*.sh /home/nobody/*.sh && \
 	/bin/bash /root/install.sh
