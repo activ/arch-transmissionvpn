@@ -4,6 +4,11 @@
 [OpenVPN](https://openvpn.net/)
 [Privoxy](http://www.privoxy.org/)
 
+**Important information when updating**
+The current build uses more variables than previous ones, make sure you check below which ones are needed.
+
+
+
 **Description**
 
 
@@ -107,4 +112,4 @@ id <username>
 
 
 
-[Support forum](http://lime-technology.com/forum/index.php?topic=47832.0)
+[Support forum](https://lime-technology.com/forum/index.php?topic=48899.0)
