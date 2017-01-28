@@ -1,23 +1,18 @@
 #!/bin/bash
 
-# if config file doesnt exist then copy stock config file
-#if [[ ! -f /config/core.conf ]]; then
-#	cp /home/nobody/transmission/core.conf /config/
-#fi
-
 # if vpn set to "no" then don't run openvpn
-if [[ $VPN_ENABLED == "no" ]]; then
+if [[ "${VPN_ENABLED}" == "no" ]]; then
 
-	echo "[info] VPN not enabled, skipping VPN tunnel local ip checks"
+	echo "[info] VPN not enabled, skipping VPN tunnel local ip/port checks"
 
-	transmission_ip=""
+	transmission_ip="0.0.0.0"
 
-	# set listen interface ip address for transmission
-#	sed -i -e 's~"listen_interface":\s*"[^"]*~"listen_interface": "'"${transmission_ip}"'~g' /config/core.conf
+	echo "[info] Removing any transmission session lock files left over from the previous run..."
+	rm -f /config/transmission/session/*.lock
 
-	# run transmission daemon
-	echo "[info] All checks complete, starting Transmission..."
-	/usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" 
+	# run transmission
+	echo "[info] Attempting to start transmission..."
+	/usr/bin/script /home/nobody/typescript --command "/usr/bin/tmux new-session -s rt -n transmission /usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" " &>/dev/null
 
 else
 
@@ -26,114 +21,183 @@ else
 	# create pia client id (randomly generated)
 	client_id=`head -n 100 /dev/urandom | md5sum | tr -d " -"`
 
-	# run script to check ip is valid for tun0
-	source /home/nobody/checkip.sh
+
+	# run script to check ip is valid for tunnel device
+	source /home/nobody/checkvpnip.sh
 
 	# set triggers to first run
-	first_run="true"
-	reload="false"
+	transmission_running="false"
+	ip_change="false"
+	port_change="false"
 
-	# set empty values for port and ip
+	# set default values for port and ip
 	transmission_port=""
-	transmission_ip=""
+	transmission_ip="0.0.0.0"
 
-	# set sleep period for recheck (in mins)
-	sleep_period="5"
-
+	# remove previously run pid file (if it exists)
+	rm -f /home/nobody/downloader.sleep.pid
+	
 	# while loop to check ip and port
 	while true; do
+
+		# write the current session's pid to file (used to kill sleep process if transmission/openvpn terminates)
+		echo $$ > /home/nobody/downloader.sleep.pid
+
+		# run script to check ip is valid for tunnel device (will block until valid)
+		source /home/nobody/checkvpnip.sh
 
 		# run scripts to identity vpn ip
 		source /home/nobody/getvpnip.sh
 
-		if [[ $first_run == "false" ]]; then
+		# if vpn_ip is not blank then run, otherwise log warning
+		if [[ ! -z "${vpn_ip}" ]]; then
 
-			# if current bind interface ip is different to tunnel local ip then re-configure transmission
-			if [[ $transmission_ip != "$vpn_ip" ]]; then
+			# check if transmission is running, if not then skip reconfigure for port/ip
+			if ! pgrep -f /usr/bin/transmission-daemon > /dev/null; then
 
-				echo "[info] Transmission listening interface IP $transmission_ip and VPN provider IP different, reconfiguring for VPN provider IP $vpn_ip"
+				echo "[info] transmission not running"
 
-				# mark as reload required due to mismatch
-				transmission_ip="${vpn_ip}"
-				reload="true"
+				# mark as transmission not running
+				transmission_running="false"
 
 			else
 
-				echo "[info] transmission listening interface IP $transmission_ip and VPN provider IP $vpn_ip match"
+				# if transmission is running, then reconfigure port/ip
+				transmission_running="true"
+
+			fi
+
+			# if current bind interface ip is different to tunnel local ip then re-configure transmission
+			if [[ "${transmission_ip}" != "${vpn_ip}" ]]; then
+
+				echo "[info] transmission listening interface IP $transmission_ip and VPN provider IP ${vpn_ip} different, marking for reconfigure"
+
+				# mark as reload required due to mismatch
+				ip_change="true"
+
+			fi
+
+			if [[ "${VPN_PROV}" == "pia" ]]; then
+
+				# run scripts to identify vpn port
+				source /home/nobody/getvpnport.sh
+
+				# if vpn port is not an integer then log warning
+				if [[ ! "${VPN_INCOMING_PORT}" =~ ^-?[0-9]+$ ]]; then
+
+					echo "[warn] PIA incoming port is not an integer, downloads will be slow, does PIA remote gateway supports port forwarding?"
+
+					# set vpn port to current transmission port, as we currently cannot detect incoming port (line saturated, or issues with pia)
+					VPN_INCOMING_PORT="${transmission_port}"
+
+				else
+
+					if [[ "${transmission_running}" == "true" ]]; then
+
+						# run netcat to identify if port still open, use exit code
+						nc_exitcode=$(/usr/bin/nc -z -w 3 "${transmission_ip}" "${transmission_port}")
+
+						if [[ "${nc_exitcode}" -ne 0 ]]; then
+
+							echo "[info] transmission incoming port closed, marking for reconfigure"
+
+							# mark as reconfigure required due to mismatch
+							port_change="true"
+
+						elif [[ "${transmission_port}" != "${VPN_INCOMING_PORT}" ]]; then
+
+							echo "[info] transmission incoming port $transmission_port and VPN incoming port ${VPN_INCOMING_PORT} different, marking for reconfigure"
+
+							# mark as reconfigure required due to mismatch
+							port_change="true"
+
+						fi
+
+					fi
+
+				fi
+
+			fi
+
+			if [[ "${transmission_running}" == "true" ]]; then
+
+				if [[ "${VPN_PROV}" == "pia" ]]; then
+
+					# reconfigure transmission with new port
+					if [[ "${port_change}" == "true" ]]; then
+
+						echo "[info] Reconfiguring transmission due to port change..."
+						/usr/bin/script /home/nobody/typescript --command "killall transmission-daemon"
+						/usr/bin/script /home/nobody/typescript --command "/usr/bin/tmux new-session -d -s rt -n transmission /usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" "--bind-address-ipv4" "${transmission_ip}" "--peerport" "$transmission_port""
+						echo "[info] transmission reconfigured for port change"
+
+					fi
+				fi
+
+				# reconfigure transmission with new ip
+				if [[ "${ip_change}" == "true" ]]; then
+
+					echo "[info] Reconfiguring transmission due to ip change..."
+					/usr/bin/script /home/nobody/typescript --command "killall transmission-daemon"
+					/usr/bin/script /home/nobody/typescript --command "/usr/bin/tmux new-session -d -s rt -n transmission /usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" "--bind-address-ipv4" "${transmission_ip}" "--peerport" "$transmission_port""
+					echo "[info] transmission reconfigured for ip change"
+
+				fi
+
+			else
+
+				echo "[info] Attempting to start transmission..."
+
+				echo "[info] Removing any transmission session lock files left over from the previous run..."
+				rm -f /config/transmission/session/*.lock
+
+				if [[ "${VPN_PROV}" == "pia" || -n "${VPN_INCOMING_PORT}" ]]; then
+
+					# run tmux attached to transmission, specifying listening interface and port
+					/usr/bin/script /home/nobody/typescript --command "/usr/bin/tmux new-session -d -s rt -n transmission /usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" "--bind-address-ipv4" "${transmission_ip}" "--peerport" "$transmission_port""
+
+				else
+
+					# run tmux attached to transmission, specifying listening interface
+					/usr/bin/script /home/nobody/typescript --command "/usr/bin/tmux new-session -d -s rt -n transmission /usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" "--bind-address-ipv4" "${transmission_ip}""
+
+				fi
+
+				echo "[info] transmission started"
+				
+
+			fi
+
+			# set transmission ip and port to current vpn ip and port (used when checking for changes on next run)
+			transmission_ip="${vpn_ip}"
+			transmission_port="${VPN_INCOMING_PORT}"
+
+			# reset triggers to negative values
+			transmission_running="false"
+			ip_change="false"
+			port_change="false"
+
+			if [[ "${DEBUG}" == "true" ]]; then
+
+				echo "[debug] VPN incoming port is ${VPN_INCOMING_PORT}"
+				echo "[debug] VPN IP is ${vpn_ip}"
+				echo "[debug] transmission incoming port is ${transmission_port}"
+				echo "[debug] transmissionn IP is ${transmission_ip}"
 
 			fi
 
 		else
 
-			echo "[info] First run detected, setting Transmission listening interface $vpn_ip"
-
-			# mark as reload required due to first run
-			transmission_ip="${vpn_ip}"
-			reload="true"
+			echo "[warn] VPN IP not detected, VPN tunnel maybe down"
 
 		fi
 
-		if [[ $VPN_PROV == "pia" ]]; then
-
-			if [[ $first_run == "false" ]]; then
-
-				# run netcat to identify if port still open, use exit code
-				if ! /usr/bin/nc -z -w 3 "${transmission_ip}" "${transmission_port}"; then
-
-					echo "[info] transmission incoming port $transmission_port closed"
-
-					# run scripts to identify vpn port
-					source /home/nobody/getvpnport.sh
-
-					echo "[info] Reconfiguring for VPN provider port $vpn_port"
-
-					# mark as reload required due to mismatch
-					transmission_port="${vpn_port}"
-					reload="true"
-
-				else
-
-					echo "[info] Transmission incoming port $transmission_port open"
-
-				fi
-
-			else
-
-				# run scripts to identify vpn port
-				source /home/nobody/getvpnport.sh
-
-				echo "[info] First run detected, setting transmission incoming port $vpn_port"
-
-				if [[ ! $vpn_port =~ ^-?[0-9]+$ ]]; then
-					echo "[warn] PIA incoming port is not an integer, downloads will be slow, does PIA remote gateway supports port forwarding?"
-				fi
-
-				# mark as reload required due to first run
-				transmission_port="${vpn_port}"
-				reload="true"
-
-			fi
-
+		# if pia then throttle checks to 10 mins (to prevent hammering api for incoming port), else 30 secs
+		if [[ "${VPN_PROV}" == "pia" ]]; then
+			sleep 10m
+		else
+			sleep 30s
 		fi
-
-		if [[ $reload == "true" ]]; then
-
-				# run transmission daemon
-				echo "[info] All checks complete, starting transmission..."
-				if [[ $VPN_PROV == "pia" ]]; then
-					/usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" "--bind-address-ipv4" "${transmission_ip}" "--peerport" "$transmission_port"
-				else
-			    	/usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" "--bind-address-ipv4" "${transmission_ip}" 
-				fi
-		
-		fi
-
-		# reset triggers to negative values
-		first_run="false"
-		reload="false"
-
-		echo "[info] Sleeping for ${sleep_period} mins before rechecking listen interface and port for PIA only"
-		sleep "${sleep_period}"
 
 	done
 
