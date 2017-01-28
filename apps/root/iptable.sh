@@ -43,22 +43,10 @@ else
 
 	echo "[info] iptable_mangle support detected, adding fwmark for tables"
 
-	# setup route for rutorrent http using set-mark to route traffic for port 80 to eth0
-	echo "9080    rutorrent_http" >> /etc/iproute2/rt_tables
-	ip rule add fwmark 1 table rutorrent_http
-	ip route add default via $DEFAULT_GATEWAY table rutorrent_http
-
-	# setup route for rutorrent https using set-mark to route traffic for port 443 to eth0
-	echo "9443    rutorrent_https" >> /etc/iproute2/rt_tables
-	ip rule add fwmark 2 table rutorrent_https
-	ip route add default via $DEFAULT_GATEWAY table rutorrent_https
-
-	# setup route for flood using set-mark to route traffic for port 3000 to eth0
-	if [[ $ENABLE_FLOOD == "yes" || $ENABLE_FLOOD == "both" ]]; then
-		echo "3000    flood" >> /etc/iproute2/rt_tables
-		ip rule add fwmark 3 table flood
-		ip route add default via $DEFAULT_GATEWAY table flood
-	fi
+	# setup route for transmission http using set-mark to route traffic for port 80 to eth0
+	echo "9091    transmission_http" >> /etc/iproute2/rt_tables
+	ip rule add fwmark 1 table transmission_http
+	ip route add default via $DEFAULT_GATEWAY table transmission_http
 
 fi
 
@@ -88,8 +76,8 @@ for lan_network_item in "${lan_network_list[@]}"; do
 	# strip whitespace from start and end of lan_network_item
 	lan_network_item=$(echo "${lan_network_item}" | sed -e 's/^[ \t]*//')
 
-	# accept input to rtorrent scgi - used for lan access
-	iptables -A INPUT -i eth0 -s "${lan_network_item}" -p tcp --dport 5000 -j ACCEPT
+	# accept input to transmission scgi - used for lan access
+	iptables -A INPUT -i eth0 -s "${lan_network_item}" -p tcp --dport 9091 -j ACCEPT
 
 	# accept input to privoxy if enabled
 	if [[ $ENABLE_PRIVOXY == "yes" ]]; then
@@ -143,8 +131,8 @@ for lan_network_item in "${lan_network_list[@]}"; do
 	# strip whitespace from start and end of lan_network_item
 	lan_network_item=$(echo "${lan_network_item}" | sed -e 's/^[ \t]*//')
 
-	# accept output to rtorrent scgi - used for lan access
-	iptables -A OUTPUT -o eth0 -d "${lan_network_item}" -p tcp --sport 5000 -j ACCEPT
+	# accept output to transmission - used for lan access
+	iptables -A OUTPUT -o eth0 -d "${lan_network_item}" -p tcp --sport 9091 -j ACCEPT
 
 	# accept output from privoxy if enabled - used for lan access
 	if [[ $ENABLE_PRIVOXY == "yes" ]]; then
