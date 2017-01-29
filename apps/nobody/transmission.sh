@@ -128,7 +128,7 @@ else
 
 						echo "[info] Reconfiguring transmission due to port change..."
 						/usr/bin/script /home/nobody/typescript --command "killall transmission-daemon"
-						/usr/bin/script /home/nobody/typescript --command "/usr/bin/tmux new-session -d -s rt -n transmission /usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" "--bind-address-ipv4" "${transmission_ip}" "--peerport" "$transmission_port""
+						/usr/bin/script /home/nobody/typescript --command "/usr/bin/tmux new-session -d -s rt -n transmission /usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" "--bind-address-ipv4" "${transmission_ip}" "--peerport" "${transmission_port}""
 						echo "[info] transmission reconfigured for port change"
 
 					fi
@@ -139,7 +139,7 @@ else
 
 					echo "[info] Reconfiguring transmission due to ip change..."
 					/usr/bin/script /home/nobody/typescript --command "killall transmission-daemon"
-					/usr/bin/script /home/nobody/typescript --command "/usr/bin/tmux new-session -d -s rt -n transmission /usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" "--bind-address-ipv4" "${transmission_ip}" "--peerport" "$transmission_port""
+					/usr/bin/script /home/nobody/typescript --command "/usr/bin/tmux new-session -d -s rt -n transmission /usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" "--bind-address-ipv4" "${transmission_ip}" "--peerport" "${transmission_port}""
 					echo "[info] transmission reconfigured for ip change"
 
 				fi
@@ -154,7 +154,7 @@ else
 				if [[ "${VPN_PROV}" == "pia" || -n "${VPN_INCOMING_PORT}" ]]; then
 
 					# run tmux attached to transmission, specifying listening interface and port
-					/usr/bin/script /home/nobody/typescript --command "/usr/bin/tmux new-session -d -s rt -n transmission /usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" "--bind-address-ipv4" "${transmission_ip}" "--peerport" "$transmission_port""
+					/usr/bin/script /home/nobody/typescript --command "/usr/bin/tmux new-session -d -s rt -n transmission /usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" "--bind-address-ipv4" "${transmission_ip}" "--peerport" "${transmission_port}""
 
 				else
 
