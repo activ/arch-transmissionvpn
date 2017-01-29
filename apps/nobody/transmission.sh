@@ -152,12 +152,12 @@ else
 				rm -f /config/transmission/session/*.lock
 
 				if [[ "${VPN_PROV}" == "pia" || -n "${VPN_INCOMING_PORT}" ]]; then
-
+					echo "[info] pia chosen start with interface and port"
 					# run tmux attached to transmission, specifying listening interface and port
 					/usr/bin/script /home/nobody/typescript --command "/usr/bin/tmux new-session -d -s rt -n transmission /usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" "--bind-address-ipv4" "${transmission_ip}" "--peerport" "${transmission_port}""
 
 				else
-
+					echo "[info] non pia start"
 					# run tmux attached to transmission, specifying listening interface
 					/usr/bin/script /home/nobody/typescript --command "/usr/bin/tmux new-session -d -s rt -n transmission /usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" "--bind-address-ipv4" "${transmission_ip}""
 
