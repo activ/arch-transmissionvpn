@@ -47,14 +47,8 @@ Please replace all user variables in the above command defined by <> with the co
 
 **Access transmission (web ui)**
 
-`http://<host ip>:9080/`
+`http://<host ip>:9091/`
 
-or
-
-`https://<host ip>:9091/`
-
-Username:- admin
-Password:- rutorrent
 
 **Access Privoxy**
 
@@ -111,7 +105,6 @@ User ID (PUID) and Group ID (PGID) can be found by issuing the following command
 id <username>
 ```
 
-The STRONG_CERTS environment variable is used to define whether to use strong certificates and enhanced encryption ciphers when connecting to PIA (does not affect other providers).
-___
 
-[Support forum](https://lime-technology.com/forum/index.php?topic=48899.0)
+
+[Support forum](http://lime-technology.com/forum/index.php?topic=47832.0)
