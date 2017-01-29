@@ -31,7 +31,7 @@ else
 	port_change="false"
 
 	# set default values for port and ip
-	transmission_port=""
+	transmission_port="9091"
 	transmission_ip="0.0.0.0"
 
 	# remove previously run pid file (if it exists)
@@ -152,7 +152,7 @@ else
 				rm -f /config/transmission/session/*.lock
 
 				if [[ "${VPN_PROV}" == "pia" || -n "${VPN_INCOMING_PORT}" ]]; then
-					echo "[info] pia chosen start with interface and port"
+					echo "[info] pia chosen start with ip ${transmission_ip} and port ${transmission_port}"
 					# run tmux attached to transmission, specifying listening interface and port
 					/usr/bin/script /home/nobody/typescript --command "/usr/bin/tmux new-session -d -s rt -n transmission /usr/bin/transmission-daemon "--foreground" "--config-dir" "/config" "--allowed" "${WHITELIST}" "--bind-address-ipv4" "${transmission_ip}" "--peerport" "${transmission_port}""
 
