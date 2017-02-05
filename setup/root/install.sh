@@ -77,6 +77,15 @@ EOF
 
 # env vars
 ####
+# replace permissions placeholder string with contents of file (here doc)
+sed -i '/# PERMISSIONS_PLACEHOLDER/{
+    s/# PERMISSIONS_PLACEHOLDER//g
+    r /tmp/permissions_heredoc
+}' /root/init.sh
+rm /tmp/permissions_heredoc
+
+# env vars
+####
 
 cat <<'EOF' > /tmp/envvars_heredoc
 
@@ -188,7 +197,6 @@ if [[ $VPN_ENABLED == "yes" ]]; then
 		export ENABLE_PRIVOXY="no"
 	fi
 
-
 	
 elif [[ $VPN_ENABLED == "no" ]]; then
 	echo "[warn] !!IMPORTANT!! You have set the VPN to disabled, you will NOT be secure!" | ts '%Y-%m-%d %H:%M:%.S'
@@ -196,6 +204,12 @@ fi
 
 EOF
 
+# replace envars placeholder string with contents of file (here doc)
+sed -i '/# ENVVARS_PLACEHOLDER/{
+    s/# ENVVARS_PLACEHOLDER//g
+    r /tmp/envvars_heredoc
+}' /root/init.sh
+rm /tmp/envvars_heredoc
 
 # cleanup
 yes|pacman -Scc

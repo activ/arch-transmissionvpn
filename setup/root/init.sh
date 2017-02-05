@@ -3,45 +3,85 @@
 # exit script if return code != 0
 set -e
 
-# if uid not specified then use default uid for user nobody 
-if [[ -z "${PUID}" ]]; then
-	PUID="99"
-fi
+# send stdout and stderr to supervisor log file (to capture output from this script)
+exec 3>&1 4>&2 1>>/config/supervisord.log 2>&1
 
-# if gid not specifed then use default gid for group users
-if [[ -z "${PGID}" ]]; then
-	PGID="100"
+cat << "EOF"
+Created by...
+___.   .__       .__                   
+\_ |__ |__| ____ |  |__   ____ ___  ___
+ | __ \|  |/    \|  |  \_/ __ \\  \/  /
+ | \_\ \  |   |  \   Y  \  ___/ >    < 
+ |___  /__|___|  /___|  /\___  >__/\_ \
+     \/        \/     \/     \/      \/
+   https://hub.docker.com/u/binhex/
+
+EOF
+
+echo "[info] Host is running ${HOST_OS}" | ts '%Y-%m-%d %H:%M:%.S'
+
+
+echo "[info] System information $(uname -a)" | ts '%Y-%m-%d %H:%M:%.S'
+
+export PUID=$(echo "${PUID}" | sed -e 's/^[ \t]*//')
+if [[ ! -z "${PUID}" ]]; then
+	echo "[info] PUID defined as '${PUID}'" | ts '%Y-%m-%d %H:%M:%.S'
+else
+	echo "[warn] PUID not defined (via -e PUID), defaulting to '99'" | ts '%Y-%m-%d %H:%M:%.S'
+	export PUID="99"
 fi
 
 # set user nobody to specified user id (non unique)
-usermod -o -u "${PUID}" nobody
-echo "[info] Env var PUID  defined as ${PUID}"
+usermod -o -u "${PUID}" nobody &>/dev/null
+
+export PGID=$(echo "${PGID}" | sed -e 's/^[ \t]*//')
+if [[ ! -z "${PGID}" ]]; then
+	echo "[info] PGID defined as '${PGID}'" | ts '%Y-%m-%d %H:%M:%.S'
+else
+	echo "[warn] PGID not defined (via -e PGID), defaulting to '100'" | ts '%Y-%m-%d %H:%M:%.S'
+	export PGID="100"
+fi
 
 # set group users to specified group id (non unique)
-groupmod -o -g "${PGID}" users
-echo "[info] Env var PGID defined as ${PGID}"
+groupmod -o -g "${PGID}" users &>/dev/null
 
-# check for presence of perms file, if it exists then skip
-# setting permissions, otherwise recursively set on /config
+# check for presence of perms file, if it exists then skip setting
+# permissions, otherwise recursively set on volume mappings for host
 if [[ ! -f "/config/perms.txt" ]]; then
 
-	# set permissions for /config volume mapping
-	echo "[info] Setting permissions recursively on /config..."
-	chown -R "${PUID}":"${PGID}" /config
-	chmod -R 775 /config
+	echo "[info] Setting permissions recursively on volume mappings..." | ts '%Y-%m-%d %H:%M:%.S'
+
+	if [[ -d "/data" ]]; then
+		volumes=( "/config" "/data" )
+	else
+		volumes=( "/config" )
+	fi
+
+	set +e
+	chown -R "${PUID}":"${PGID}" /usr/bin/transmission-daemon /usr/bin/privoxy /etc/privoxy /home/nobody /config
+	exit_code_chown=$?
+	chmod -R 775 /usr/bin/transmission-daemon /usr/bin/privoxy /etc/privoxy /home/nobody /config
+	exit_code_chmod=$?
+	set -e
+
+	if (( ${exit_code_chown} != 0 || ${exit_code_chmod} != 0 )); then
+		echo "[warn] Unable to chown/chmod ${volumes}, assuming SMB mountpoint"
+	fi
+
 	echo "This file prevents permissions from being applied/re-applied to /config, if you want to reset permissions then please delete this file and restart the container." > /config/perms.txt
 
 else
 
-	echo "[info] Permissions already set for /config"
+	echo "[info] Permissions already set for volume mappings" | ts '%Y-%m-%d %H:%M:%.S'
 
 fi
 
-# set permissions inside container
-chown -R "${PUID}":"${PGID}" /usr/bin/transmission-daemon /usr/bin/privoxy /etc/privoxy /home/nobody /config
-chmod -R 775 /usr/bin/transmission-daemon /usr/bin/privoxy /etc/privoxy /home/nobody /config
+# ENVVARS_PLACEHOLDER
 
-echo "[info] Starting Supervisor..."
+# PERMISSIONS_PLACEHOLDER
 
-# run supervisor
-"/usr/bin/supervisord" -c "/etc/supervisor.conf" -n
+# restore stdout/stderr (to prevent duplicate logging from supervisor)
+exec 1>&3 2>&4
+
+echo "[info] Starting Supervisor..." | ts '%Y-%m-%d %H:%M:%.S'
+exec /usr/bin/supervisord -c /etc/supervisor.conf -n
